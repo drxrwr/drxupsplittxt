@@ -1,5 +1,5 @@
 // Fungsi untuk memecah file VCF
-document.getElementById('splitButton').addEventListener('click', function() {
+document.getElementById('splitButton').addEventListener('click', function () {
     const file = document.getElementById('vcfFileInput').files[0];
     const contactsPerFile = parseInt(document.getElementById('contactsPerFile').value, 10);
     const startNumber = parseInt(document.getElementById('startNumberInput').value, 10) || 1;
@@ -14,7 +14,7 @@ document.getElementById('splitButton').addEventListener('click', function() {
     }
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         const content = e.target.result;
         const contacts = content.split('END:VCARD').map(contact => contact.trim() + '\nEND:VCARD').filter(contact => contact.length > 10);
 
@@ -33,22 +33,22 @@ document.getElementById('splitButton').addEventListener('click', function() {
         const splitVcfFilesDiv = document.getElementById('splitVcfFiles');
         splitVcfFilesDiv.innerHTML = '';
 
+        window.lastSplitFiles = [];
+        window.lastGeneratedNames = [];
+
         splitFiles.forEach((blob, index) => {
             const currentIndex = startNumber + index;
             const link = document.createElement('a');
 
-            // Membuat nama file berdasarkan kondisi pemisahan "§"
             let generatedFileName;
             if (fileNameParts.length > 1) {
                 generatedFileName = `${fileNameParts[0]} ${currentIndex}`;
             } else if (fileNameParts[0]) {
                 generatedFileName = `${fileNameParts[0]}${currentIndex}`;
             } else {
-                // Jika fileName kosong, gunakan currentIndex saja tanpa tambahan "split-"
                 generatedFileName = `${currentIndex}`;
             }
 
-            // Menambahkan nama file tambahan jika diisi
             if (additionalFileName) {
                 generatedFileName += ` ${additionalFileName}`;
             }
@@ -60,15 +60,18 @@ document.getElementById('splitButton').addEventListener('click', function() {
             link.textContent = `Download ${generatedFileName}`;
             splitVcfFilesDiv.appendChild(link);
             splitVcfFilesDiv.appendChild(document.createElement('br'));
+
+            window.lastSplitFiles.push(blob);
+            window.lastGeneratedNames.push(generatedFileName);
         });
 
-        console.log('Memecah file VCF');
+        document.getElementById("downloadZipBtn").style.display = "block";
     };
     reader.readAsText(file);
 });
 
 // Fungsi untuk mengonversi VCF ke TXT
-document.getElementById('convertButton').addEventListener('click', function() {
+document.getElementById('convertButton').addEventListener('click', function () {
     const file = document.getElementById('vcfFileInputTxt').files[0];
     const outputTextArea = document.getElementById('outputTextArea');
     const outputFileName = document.getElementById('outputFileNameInput').value.trim();
@@ -79,7 +82,7 @@ document.getElementById('convertButton').addEventListener('click', function() {
     }
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         const content = e.target.result;
         const contacts = content.split('END:VCARD').map(contact => contact.trim()).filter(contact => contact.length > 0);
         let phoneNumbers = contacts.map(contact => {
@@ -87,14 +90,12 @@ document.getElementById('convertButton').addEventListener('click', function() {
             return match ? match[1] : null;
         }).filter(Boolean);
 
-        // Menampilkan nomor telepon di textarea
         outputTextArea.value = phoneNumbers.join('\n');
         document.getElementById('totalContacts').innerText = `Total contacts: ${phoneNumbers.length}`;
 
-        // Menyiapkan unduhan file TXT
         const blob = new Blob([outputTextArea.value], { type: 'text/plain' });
         const txtDownloadLink = document.getElementById('txtDownloadLink');
-        txtDownloadLink.innerHTML = ''; // Bersihkan link download sebelumnya
+        txtDownloadLink.innerHTML = '';
 
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -103,4 +104,42 @@ document.getElementById('convertButton').addEventListener('click', function() {
         txtDownloadLink.appendChild(link);
     };
     reader.readAsText(file);
+});
+
+
+
+// =====================================================
+// FITUR ZIP — MENAMBAHKAN TANPA MENGUBAH KODE LAMA
+// =====================================================
+document.getElementById("downloadZipBtn").addEventListener("click", async function () {
+
+    if (!window.lastSplitFiles || window.lastSplitFiles.length === 0) {
+        alert("Belum ada file split.");
+        return;
+    }
+
+    const fileNameInput = document.getElementById('splitFileNameInput').value.trim();
+    const addNameInput = document.getElementById('additionalFileNameInput').value.trim();
+    const startNum = parseInt(document.getElementById('startNumberInput').value, 10) || 1;
+
+    const baseName = fileNameInput.split('§')[0].trim();
+
+    const endNum = startNum + window.lastSplitFiles.length - 1;
+
+    let zipName = `${baseName} ${startNum}-${endNum}`;
+    if (addNameInput) zipName += ` ${addNameInput}`;
+    zipName += `.zip`;
+
+    const zip = new JSZip();
+
+    for (let i = 0; i < window.lastSplitFiles.length; i++) {
+        zip.file(window.lastGeneratedNames[i], window.lastSplitFiles[i]);
+    }
+
+    const content = await zip.generateAsync({ type: "blob" });
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(content);
+    a.download = zipName;
+    a.click();
 });
